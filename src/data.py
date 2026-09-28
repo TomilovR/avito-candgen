@@ -2,7 +2,6 @@
 
 import re
 
-import numpy as np
 import pandas as pd
 import pyarrow.parquet as pq
 
@@ -13,8 +12,6 @@ ITEM_COLS = [
     "item_category_id", "item_microcat_id", "item_location_id", "item_latitude",
     "item_longitude", "item_rating", "item_rating_reviews_count", "item_price",
 ]
-QUERY_COLS = ["search_query", "search_location_id", "search_is_delivery_search",
-              "search_infm_params_text", "search_category"]
 
 # один текст с разной локацией или фильтрами считаем разными запросами
 SIG = ["qn", "search_location_id", "pn", "search_category"]

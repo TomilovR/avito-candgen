@@ -16,10 +16,10 @@ SEED = 42
 
 # отложенные выборки из train, см. README
 N_VAL, VAL_SEED = 2000, 0      # оценка
-N_TRN, TRN_SEED = int(os.environ.get("N_TRN", 6000)), 1      # обучение ранкера, тексты не пересекаются с val
+N_TRN, TRN_SEED = 6000, 1      # обучение ранкера, тексты не пересекаются с val
 
 TOP_K = 50
-K_POOL = int(os.environ.get("K_POOL", 150))                   # кандидатов первой стадии на ранкер
+K_POOL = 150                   # кандидатов первой стадии на ранкер
 KNN_TEXTS = 20                 # похожих запросов train для приоров
 
 # веса линейной первой стадии, подобраны перебором на валидации
@@ -40,11 +40,10 @@ LINEAR_WEIGHTS = {
 }
 
 USE_RANKER = True
-LGB_ROUNDS = int(os.environ.get("LGB_ROUNDS", 200))
-LGB_SEEDS = int(os.environ.get("LGB_SEEDS", 1))
+LGB_ROUNDS = 200
 LGB_PARAMS = dict(
     objective="lambdarank", metric="ndcg", eval_at=[50], learning_rate=0.05,
-    num_leaves=int(os.environ.get("LGB_LEAVES", 31)), min_data_in_leaf=50, feature_fraction=0.8, bagging_fraction=0.8,
+    num_leaves=31, min_data_in_leaf=50, feature_fraction=0.8, bagging_fraction=0.8,
     bagging_freq=1, lambdarank_truncation_level=60, verbose=-1,
     seed=SEED, deterministic=True, force_row_wise=True, num_threads=8,
 )

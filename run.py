@@ -49,7 +49,6 @@ def run_side(ctx, tag, qdf, trf):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default=str(config.ROOT / "answer.csv"))
-    ap.add_argument("--skip-validation", action="store_true")
     args = ap.parse_args()
     set_determinism()
     config.CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -70,36 +69,31 @@ def main():
     log("3-4. Признаки сторон и пулы первой стадии")
     sides = {}
     for tag, qdf in (("trn", trn), ("val", val)):
-        if tag == "val" and args.skip_validation:
-            continue
         sides[tag] = run_side(ctx, tag, qdf, train[~data.heldout_mask(train, qdf)])
         sides[tag]["truth"] = [[item_pos[i] for i in t] for t in qdf["truth"]]
         sides[tag]["y"] = ranker.labels(sides[tag]["idx"], sides[tag]["truth"])
     sides["test"] = run_side(ctx, "test", queries, train)
     feats = sides["test"]["feats"]
 
-    report = {"test_seen_share": test_seen_share}
-    if not args.skip_validation:
-        log("5a. Валидация (ранкер обучен только на trn)")
-        v = sides["val"]
-        m_lin = metrics.recall_at(v["idx"][:, :config.TOP_K], v["truth"], v["seen"], test_seen_share)
-        m_pool = metrics.recall_at(v["idx"], v["truth"], v["seen"], test_seen_share)
-        log(f"   линейная первая стадия @50: {metrics.fmt(m_lin)}")
-        log(f"   покрытие пула @{config.K_POOL}: {metrics.fmt(m_pool)}")
-        report.update(linear_at50=m_lin, pool=m_pool)
-        if config.USE_RANKER:
-            mdl = ranker.fit([sides["trn"]["X"]], [sides["trn"]["y"]], feats)
-            m_rk = metrics.recall_at(ranker.rerank(mdl, v["idx"], v["X"]), v["truth"], v["seen"], test_seen_share)
-            log(f"   ранкер @50: {metrics.fmt(m_rk)}")
-            report["ranker_at50"] = m_rk
-            imp = sorted(zip(feats, mdl[0].feature_importance("gain").round(1).tolist()), key=lambda x: -x[1])
-            report["feature_importance_gain"] = imp
+    log("5a. Валидация (ранкер обучен только на trn)")
+    v = sides["val"]
+    m_lin = metrics.recall_at(v["idx"][:, :config.TOP_K], v["truth"], v["seen"], test_seen_share)
+    m_pool = metrics.recall_at(v["idx"], v["truth"], v["seen"], test_seen_share)
+    log(f"   линейная первая стадия @50: {metrics.fmt(m_lin)}")
+    log(f"   покрытие пула @{config.K_POOL}: {metrics.fmt(m_pool)}")
+    report = {"test_seen_share": test_seen_share, "linear_at50": m_lin, "pool": m_pool}
+    if config.USE_RANKER:
+        mdl = ranker.fit([sides["trn"]["X"]], [sides["trn"]["y"]], feats)
+        m_rk = metrics.recall_at(ranker.rerank(mdl, v["idx"], v["X"]), v["truth"], v["seen"], test_seen_share)
+        log(f"   ранкер @50: {metrics.fmt(m_rk)}")
+        report["ranker_at50"] = m_rk
+        imp = sorted(zip(feats, mdl.feature_importance("gain").round(1).tolist()), key=lambda x: -x[1])
+        report["feature_importance_gain"] = imp
 
     log("5b. Финальный ответ")
     te = sides["test"]
-    if config.USE_RANKER:
-        train_sides = [s for s in ("trn", "val") if s in sides]
-        mdl = ranker.fit([sides[s]["X"] for s in train_sides], [sides[s]["y"] for s in train_sides], feats)
+    if config.USE_RANKER:   # финальный ранкер учится на trn + val
+        mdl = ranker.fit([sides["trn"]["X"], sides["val"]["X"]], [sides["trn"]["y"], sides["val"]["y"]], feats)
         top = ranker.rerank(mdl, te["idx"], te["X"])
     else:
         top = te["idx"][:, :config.TOP_K]
@@ -110,7 +104,6 @@ def main():
     lin = submission.build_answers(te["idx"][:, :config.TOP_K], items, queries, train)
     submission.save_and_check(lin, config.ROOT / "reports" / "answer_linear.csv", items, queries)
 
-    (config.ROOT / "reports").mkdir(exist_ok=True)
     with open(config.ROOT / "reports" / "validation.json", "w", encoding="utf-8") as f:
         json.dump(report, f, ensure_ascii=False, indent=1)
     log(f"Готово за {time.time() - t0:.0f} с")
