@@ -1,0 +1,7 @@
+data/
+cache/
+*.parquet
+*.npy
+__pycache__/
+*.pyc
+reports_run1.log
